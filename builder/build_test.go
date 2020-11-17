@@ -40,6 +40,7 @@ func Test_getDockerBuildCommand_NoOpts(t *testing.T) {
 		HTTPSProxy:       "",
 		BuildArgMap:      make(map[string]string),
 		BuildOptPackages: []string{},
+		BuildKitSecret:   []string{},
 	}
 
 	want := "build -t imagename:latest ."
@@ -67,6 +68,7 @@ func Test_getDockerBuildCommand_WithNoCache(t *testing.T) {
 		HTTPSProxy:       "",
 		BuildArgMap:      make(map[string]string),
 		BuildOptPackages: []string{},
+		BuildKitSecret:   []string{},
 	}
 
 	want := "build --no-cache -t imagename:latest ."
@@ -95,6 +97,7 @@ func Test_getDockerBuildCommand_WithProxies(t *testing.T) {
 		HTTPSProxy:       "https://127.0.0.1:3128",
 		BuildArgMap:      make(map[string]string),
 		BuildOptPackages: []string{},
+		BuildKitSecret:   []string{},
 	}
 
 	want := "build --build-arg http_proxy=http://127.0.0.1:3128 --build-arg https_proxy=https://127.0.0.1:3128 -t imagename:latest ."
@@ -124,6 +127,7 @@ func Test_getDockerBuildCommand_WithBuildArg(t *testing.T) {
 			"PASSWORD": "1234",
 		},
 		BuildOptPackages: []string{},
+		BuildKitSecret:   []string{},
 	}
 
 	_, values := getDockerBuildCommand(dockerBuildVal)
@@ -140,78 +144,114 @@ func Test_getDockerBuildCommand_WithBuildArg(t *testing.T) {
 	}
 }
 
+func Test_getDockerBuildCommand_WithBuildKitSecret(t *testing.T) {
+	dockerBuildVal := dockerBuild{
+		Image:            "imagename:latest",
+		NoCache:          false,
+		Squash:           false,
+		HTTPProxy:        "",
+		HTTPSProxy:       "",
+		BuildArgMap:      make(map[string]string),
+		BuildOptPackages: []string{},
+		BuildKitSecret:   []string{"id=s1,src=s1.txt"},
+	}
+
+	want := "build --secret id=s1,src=s1.txt -t imagename:latest ."
+
+	wantCommand := "docker"
+
+	command, args := getDockerBuildCommand(dockerBuildVal)
+
+	joined := strings.Join(args, " ")
+
+	if joined != want {
+		t.Errorf("getDockerBuildCommand want: \"%s\", got: \"%s\"", want, joined)
+	}
+
+	if command != wantCommand {
+		t.Errorf("getDockerBuildCommand want command: \"%s\", got: \"%s\"", wantCommand, command)
+	}
+}
+
 func Test_buildFlagSlice(t *testing.T) {
 
 	var buildFlagOpts = []struct {
-		title         string
-		nocache       bool
-		squash        bool
-		httpProxy     string
-		httpsProxy    string
-		buildArgMap   map[string]string
-		buildPackages []string
-		expectedSlice []string
-		buildLabelMap map[string]string
+		title          string
+		nocache        bool
+		squash         bool
+		httpProxy      string
+		httpsProxy     string
+		buildArgMap    map[string]string
+		buildPackages  []string
+		buildkitSecret []string
+		expectedSlice  []string
+		buildLabelMap  map[string]string
 	}{
 		{
-			title:         "no cache only",
-			nocache:       true,
-			squash:        false,
-			httpProxy:     "",
-			httpsProxy:    "",
-			buildArgMap:   make(map[string]string),
-			buildPackages: []string{},
-			expectedSlice: []string{"--no-cache"},
+			title:          "no cache only",
+			nocache:        true,
+			squash:         false,
+			httpProxy:      "",
+			httpsProxy:     "",
+			buildArgMap:    make(map[string]string),
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--no-cache"},
 		},
 		{
-			title:         "no cache & squash only",
-			nocache:       true,
-			squash:        true,
-			httpProxy:     "",
-			httpsProxy:    "",
-			buildArgMap:   make(map[string]string),
-			buildPackages: []string{},
-			expectedSlice: []string{"--no-cache", "--squash"},
+			title:          "no cache & squash only",
+			nocache:        true,
+			squash:         true,
+			httpProxy:      "",
+			httpsProxy:     "",
+			buildArgMap:    make(map[string]string),
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--no-cache", "--squash"},
 		},
 		{
-			title:         "no cache & squash & http proxy only",
-			nocache:       true,
-			squash:        true,
-			httpProxy:     "192.168.0.1",
-			httpsProxy:    "",
-			buildArgMap:   make(map[string]string),
-			buildPackages: []string{},
-			expectedSlice: []string{"--no-cache", "--squash", "--build-arg", "http_proxy=192.168.0.1"},
+			title:          "no cache & squash & http proxy only",
+			nocache:        true,
+			squash:         true,
+			httpProxy:      "192.168.0.1",
+			httpsProxy:     "",
+			buildArgMap:    make(map[string]string),
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--no-cache", "--squash", "--build-arg", "http_proxy=192.168.0.1"},
 		},
 		{
-			title:         "no cache & squash & https-proxy only",
-			nocache:       true,
-			squash:        true,
-			httpProxy:     "",
-			httpsProxy:    "127.0.0.1",
-			buildArgMap:   make(map[string]string),
-			buildPackages: []string{},
-			expectedSlice: []string{"--no-cache", "--squash", "--build-arg", "https_proxy=127.0.0.1"},
+			title:          "no cache & squash & https-proxy only",
+			nocache:        true,
+			squash:         true,
+			httpProxy:      "",
+			httpsProxy:     "127.0.0.1",
+			buildArgMap:    make(map[string]string),
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--no-cache", "--squash", "--build-arg", "https_proxy=127.0.0.1"},
 		},
 		{
-			title:         "no cache & squash & http-proxy & https-proxy only",
-			nocache:       true,
-			squash:        true,
-			httpProxy:     "192.168.0.1",
-			httpsProxy:    "127.0.0.1",
-			buildArgMap:   make(map[string]string),
-			buildPackages: []string{},
-			expectedSlice: []string{"--no-cache", "--squash", "--build-arg", "http_proxy=192.168.0.1", "--build-arg", "https_proxy=127.0.0.1"},
+			title:          "no cache & squash & http-proxy & https-proxy only",
+			nocache:        true,
+			squash:         true,
+			httpProxy:      "192.168.0.1",
+			httpsProxy:     "127.0.0.1",
+			buildArgMap:    make(map[string]string),
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--no-cache", "--squash", "--build-arg", "http_proxy=192.168.0.1", "--build-arg", "https_proxy=127.0.0.1"},
 		},
 		{
-			title:         "http-proxy & https-proxy only",
-			nocache:       false,
-			squash:        false,
-			httpProxy:     "192.168.0.1",
-			httpsProxy:    "127.0.0.1",
-			buildArgMap:   make(map[string]string),
-			buildPackages: []string{},
-			expectedSlice: []string{"--build-arg", "http_proxy=192.168.0.1", "--build-arg", "https_proxy=127.0.0.1"},
+			title:          "http-proxy & https-proxy only",
+			nocache:        false,
+			squash:         false,
+			httpProxy:      "192.168.0.1",
+			httpsProxy:     "127.0.0.1",
+			buildArgMap:    make(map[string]string),
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--build-arg", "http_proxy=192.168.0.1", "--build-arg", "https_proxy=127.0.0.1"},
 		},
 		{
 			title:      "build arg map no spaces",
@@ -234,8 +274,9 @@ func Test_buildFlagSlice(t *testing.T) {
 			buildArgMap: map[string]string{
 				"muppets": "burt and ernie",
 			},
-			buildPackages: []string{},
-			expectedSlice: []string{"--build-arg", "muppets=burt and ernie"},
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--build-arg", "muppets=burt and ernie"},
 		},
 		{
 			title:      "multiple build arg map with spaces",
@@ -247,8 +288,31 @@ func Test_buildFlagSlice(t *testing.T) {
 				"muppets":    "burt and ernie",
 				"playschool": "Jemima",
 			},
-			buildPackages: []string{},
-			expectedSlice: []string{"--build-arg", "muppets=burt and ernie", "--build-arg", "playschool=Jemima"},
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--build-arg", "muppets=burt and ernie", "--build-arg", "playschool=Jemima"},
+		},
+		{
+			title:          "single secrets options map with docker buildkit build command secret option",
+			nocache:        false,
+			squash:         false,
+			httpProxy:      "",
+			httpsProxy:     "",
+			buildArgMap:    make(map[string]string),
+			buildPackages:  []string{},
+			buildkitSecret: []string{"id=s1", "id=s2"},
+			expectedSlice:  []string{"--secret", "id=s1", "--secret", "id=s2"},
+		},
+		{
+			title:          "multi secrets options map with docker buildkit build command secret option",
+			nocache:        false,
+			squash:         false,
+			httpProxy:      "",
+			httpsProxy:     "",
+			buildArgMap:    make(map[string]string),
+			buildPackages:  []string{},
+			buildkitSecret: []string{"id=s1,src=s1.txt", "id=s2,src=s2.txt"},
+			expectedSlice:  []string{"--secret", "id=s1,src=s1.txt", "--secret", "id=s2,src=s2.txt"},
 		},
 		{
 			title:      "no-cache and squash with multiple build arg map with spaces",
@@ -260,8 +324,9 @@ func Test_buildFlagSlice(t *testing.T) {
 				"muppets":    "burt and ernie",
 				"playschool": "Jemima",
 			},
-			buildPackages: []string{},
-			expectedSlice: []string{"--no-cache", "--squash", "--build-arg", "muppets=burt and ernie", "--build-arg", "playschool=Jemima"},
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
+			expectedSlice:  []string{"--no-cache", "--squash", "--build-arg", "muppets=burt and ernie", "--build-arg", "playschool=Jemima"},
 		},
 		{
 			title:      "single build-label value",
@@ -273,7 +338,8 @@ func Test_buildFlagSlice(t *testing.T) {
 				"muppets":    "burt and ernie",
 				"playschool": "Jemima",
 			},
-			buildPackages: []string{},
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
 			buildLabelMap: map[string]string{
 				"org.label-schema.name": "test function",
 			},
@@ -289,7 +355,8 @@ func Test_buildFlagSlice(t *testing.T) {
 				"muppets":    "burt and ernie",
 				"playschool": "Jemima",
 			},
-			buildPackages: []string{},
+			buildPackages:  []string{},
+			buildkitSecret: []string{},
 			buildLabelMap: map[string]string{
 				"org.label-schema.name":        "test function",
 				"org.label-schema.description": "This is a test function",
@@ -302,7 +369,7 @@ func Test_buildFlagSlice(t *testing.T) {
 
 		t.Run(test.title, func(t *testing.T) {
 
-			flagSlice := buildFlagSlice(test.nocache, test.squash, test.httpProxy, test.httpsProxy, test.buildArgMap, test.buildPackages, test.buildLabelMap)
+			flagSlice := buildFlagSlice(test.nocache, test.squash, test.httpProxy, test.httpsProxy, test.buildArgMap, test.buildPackages, test.buildLabelMap, test.buildkitSecret)
 			fmt.Println(flagSlice)
 			if len(flagSlice) != len(test.expectedSlice) {
 				t.Errorf("Slices differ in size - wanted: %d, found %d", len(test.expectedSlice), len(flagSlice))

@@ -23,7 +23,7 @@ import (
 const AdditionalPackageBuildArg = "ADDITIONAL_PACKAGE"
 
 // BuildImage construct Docker image from function parameters
-func BuildImage(image string, handler string, functionName string, language string, nocache bool, squash bool, shrinkwrap bool, buildArgMap map[string]string, buildOptions []string, tagMode schema.BuildFormat, buildLabelMap map[string]string, quietBuild bool, copyExtraPaths []string) error {
+func BuildImage(image string, handler string, functionName string, language string, nocache bool, squash bool, shrinkwrap bool, buildArgMap map[string]string, buildOptions []string, buildkitSecret []string, tagMode schema.BuildFormat, buildLabelMap map[string]string, quietBuild bool, copyExtraPaths []string) error {
 
 	if stack.IsValidTemplate(language) {
 		pathToTemplateYAML := fmt.Sprintf("./template/%s/template.yml", language)
@@ -74,6 +74,7 @@ func BuildImage(image string, handler string, functionName string, language stri
 			BuildArgMap:      buildArgMap,
 			BuildOptPackages: buildOptPackages,
 			BuildLabelMap:    buildLabelMap,
+			BuildKitSecret:   buildkitSecret,
 		}
 
 		command, args := getDockerBuildCommand(dockerBuildVal)
@@ -139,7 +140,7 @@ func GetImageTagValues(tagType schema.BuildFormat) (branch, version string, err 
 }
 
 func getDockerBuildCommand(build dockerBuild) (string, []string) {
-	flagSlice := buildFlagSlice(build.NoCache, build.Squash, build.HTTPProxy, build.HTTPSProxy, build.BuildArgMap, build.BuildOptPackages, build.BuildLabelMap)
+	flagSlice := buildFlagSlice(build.NoCache, build.Squash, build.HTTPProxy, build.HTTPSProxy, build.BuildArgMap, build.BuildOptPackages, build.BuildLabelMap, build.BuildKitSecret)
 	args := []string{"build"}
 	args = append(args, flagSlice...)
 	args = append(args, "-t", build.Image, ".")
@@ -159,6 +160,7 @@ type dockerBuild struct {
 	BuildArgMap      map[string]string
 	BuildOptPackages []string
 	BuildLabelMap    map[string]string
+	BuildKitSecret   []string
 }
 
 var defaultDirPermissions os.FileMode = 0700
@@ -330,7 +332,7 @@ func dockerBuildFolder(functionName string, handler string, language string) str
 	return tempPath
 }
 
-func buildFlagSlice(nocache bool, squash bool, httpProxy string, httpsProxy string, buildArgMap map[string]string, buildOptionPackages []string, buildLabelMap map[string]string) []string {
+func buildFlagSlice(nocache bool, squash bool, httpProxy string, httpsProxy string, buildArgMap map[string]string, buildOptionPackages []string, buildLabelMap map[string]string, buildkitSecret []string) []string {
 
 	var spaceSafeBuildFlags []string
 
@@ -360,6 +362,9 @@ func buildFlagSlice(nocache bool, squash bool, httpProxy string, httpsProxy stri
 	if len(buildOptionPackages) > 0 {
 		buildOptionPackages = deDuplicate(buildOptionPackages)
 		spaceSafeBuildFlags = append(spaceSafeBuildFlags, "--build-arg", fmt.Sprintf("%s=%s", AdditionalPackageBuildArg, strings.Join(buildOptionPackages, " ")))
+	}
+	for _, v := range buildkitSecret {
+		spaceSafeBuildFlags = append(spaceSafeBuildFlags, "--secret", fmt.Sprintf("%s", v))
 	}
 
 	for k, v := range buildLabelMap {

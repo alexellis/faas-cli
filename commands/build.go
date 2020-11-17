@@ -28,6 +28,7 @@ var (
 	buildArgs        []string
 	buildArgMap      map[string]string
 	buildOptions     []string
+	buildkitSecret   []string
 	copyExtra        []string
 	tagFormat        schema.BuildFormat
 	buildLabels      []string
@@ -51,6 +52,7 @@ func init() {
 	buildCmd.Flags().BoolVar(&shrinkwrap, "shrinkwrap", false, "Just write files to ./build/ folder for shrink-wrapping")
 	buildCmd.Flags().StringArrayVarP(&buildArgs, "build-arg", "b", []string{}, "Add a build-arg for Docker (KEY=VALUE)")
 	buildCmd.Flags().StringArrayVarP(&buildOptions, "build-option", "o", []string{}, "Set a build option, e.g. dev")
+	buildCmd.Flags().StringArrayVar(&buildkitSecret, "buildkit-secret", []string{}, "Set a secret option for buildkit, --buildkit-secret id=mysecret,src=mysecret.txt")
 	buildCmd.Flags().Var(&tagFormat, "tag", "Override latest tag on function Docker image, accepts 'latest', 'sha', 'branch', or 'describe'")
 	buildCmd.Flags().StringArrayVar(&buildLabels, "build-label", []string{}, "Add a label for Docker image (LABEL=VALUE)")
 	buildCmd.Flags().StringArrayVar(&copyExtra, "copy-extra", []string{}, "Extra paths that will be copied into the function build context")
@@ -186,6 +188,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			shrinkwrap,
 			buildArgMap,
 			buildOptions,
+			buildkitSecret,
 			tagFormat,
 			buildLabelMap,
 			quietBuild,
@@ -246,6 +249,7 @@ func build(services *stack.Services, queueDepth int, shrinkwrap, quietBuild bool
 						shrinkwrap,
 						combinedBuildArgMap,
 						combinedBuildOptions,
+						buildkitSecret,
 						tagFormat,
 						buildLabelMap,
 						quietBuild,
