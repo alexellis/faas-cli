@@ -112,8 +112,11 @@ func runSecretUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("Updating secret: " + secret.Name)
-	_, output := client.UpdateSecret(context.Background(), secret)
-	fmt.Printf(output)
+	_, err = client.UpdateSecret(context.Background(), secret)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Secret updated")
 
 	return nil
 }

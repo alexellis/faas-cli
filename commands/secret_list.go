@@ -58,7 +58,7 @@ func runSecretList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	secrets, err := client.GetSecretList(context.Background(), functionNamespace)
+	secrets, _, err := client.GetSecretList(context.Background(), functionNamespace)
 	if err != nil {
 		return err
 	}

@@ -164,7 +164,7 @@ type testAuth struct {
 	err error
 }
 
-func (c *testAuth) Set(req *http.Request) error {
+func (c *testAuth) Set(_ *http.Request) error {
 	return c.err
 }
 

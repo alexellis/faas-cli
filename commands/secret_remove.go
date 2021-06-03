@@ -6,11 +6,10 @@ package commands
 import (
 	"context"
 	"fmt"
-	"os"
-
 	"github.com/openfaas/faas-cli/proxy"
-	types "github.com/openfaas/faas-provider/types"
+	"github.com/openfaas/faas-provider/types"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 var secretRemoveCmd = &cobra.Command{
@@ -43,7 +42,7 @@ func preRunSecretRemoveCmd(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runSecretRemove(cmd *cobra.Command, args []string) error {
+func runSecretRemove(_ *cobra.Command, args []string) error {
 	var gatewayAddress string
 	gatewayAddress = getGatewayURL(gateway, defaultGateway, "", os.Getenv(openFaaSURLEnvironment))
 
@@ -66,12 +65,13 @@ func runSecretRemove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	err = client.RemoveSecret(context.Background(), secret)
+	_, err = client.RemoveSecret(context.Background(), secret)
+
 	if err != nil {
 		return err
 	}
 
-	fmt.Print("Removed.. OK.\n")
+	fmt.Println("Removed OK")
 
 	return nil
 }

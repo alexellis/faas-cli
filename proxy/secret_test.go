@@ -2,220 +2,300 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"regexp"
 	"testing"
 
 	"github.com/openfaas/faas-cli/test"
-	types "github.com/openfaas/faas-provider/types"
+	"github.com/openfaas/faas-provider/types"
 )
 
-func Test_GetSecretList_200OK(t *testing.T) {
-	s := test.MockHttpServer(t, []test.Request{
+func TestSecretList(t *testing.T) {
+	type testCases struct {
+		Name             string
+		MockResponseCode int
+		ExpectedError    error
+		ExpectedResponse interface{}
+	}
+
+	tests := []testCases{
 		{
-			ResponseStatusCode: http.StatusOK,
-			ResponseBody:       expectedSecretList,
+			Name:             "Expect 200OK with list",
+			MockResponseCode: http.StatusOK,
+			ExpectedError:    nil,
+			ExpectedResponse: makeSecretList([]string{"one", "two", "three"}),
 		},
-	})
-	defer s.Close()
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	secrets, err := client.GetSecretList(context.Background(), "openfaas-fn")
-	if err != nil {
-		t.Errorf("Error returned: %s", err.Error())
-	}
-
-	for k, v := range secrets {
-		if expectedSecretList[k] != v {
-			t.Fatalf("Expeceted: %#v - Actual: %#v", wantListFunctionsResponse[k], v)
-		}
-	}
-}
-
-func Test_GetSecretList_202Accepted(t *testing.T) {
-	s := test.MockHttpServer(t, []test.Request{
 		{
-			ResponseStatusCode: http.StatusAccepted,
-			ResponseBody:       expectedSecretList,
+			Name:             "Expect 200OK empty secrets",
+			MockResponseCode: http.StatusOK,
+			ExpectedError:    nil,
+			ExpectedResponse: []string{},
 		},
-	})
-	defer s.Close()
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	secrets, err := client.GetSecretList(context.Background(), "")
-	if err != nil {
-		t.Errorf("Error returned: %s", err.Error())
+		{
+			Name:             "Expect 200OK with invalid response",
+			MockResponseCode: http.StatusOK,
+			ExpectedError:    fmt.Errorf("cannot parse result from OpenFaaS: invalid character 'T' looking for beginning of value"),
+			ExpectedResponse: "This is not ok",
+		},
+		{
+			Name:             "Expect 202",
+			MockResponseCode: http.StatusAccepted,
+			ExpectedError:    nil,
+			ExpectedResponse: makeSecretList([]string{"one", "two", "three"}),
+		},
+		{
+			Name:             "Expect 400",
+			MockResponseCode: http.StatusBadRequest,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: 400,
+				Message:    "Bad Request",
+			},
+			ExpectedResponse: "Bad Request",
+		},
+		{
+			Name:             "Expect 500",
+			MockResponseCode: http.StatusInternalServerError,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: 500,
+				Message:    "Internal server Error",
+			},
+			ExpectedResponse: "Internal server Error",
+		},
+		{
+			Name:             "Expect 401",
+			MockResponseCode: http.StatusUnauthorized,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: 401,
+				Message:    "Not Authorized",
+			},
+			ExpectedResponse: "Not Authorized",
+		},
 	}
 
-	for k, v := range secrets {
-		if expectedSecretList[k] != v {
-			t.Fatalf("Expeceted: %#v - Actual: %#v", wantListFunctionsResponse[k], v)
-		}
-	}
-}
+	for _, testCase := range tests {
+		t.Run(testCase.Name, func(t *testing.T) {
+			s := test.MockHttpServer(t, []test.Request{
+				{
+					ResponseStatusCode: testCase.MockResponseCode,
+					ResponseBody:       testCase.ExpectedResponse,
+				},
+			})
+			defer s.Close()
+			client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
 
-func Test_GetSecretList_Not200(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusBadRequest)
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	_, err := client.GetSecretList(context.Background(), "openfaas-fn")
+			secrets, _, err := client.GetSecretList(context.Background(), "openfaas-fn")
 
-	if err == nil {
-		t.Fatalf("Error was not returned")
-	}
+			if testCase.ExpectedError == nil && err != nil {
+				t.Errorf("Error returned: %v", err)
+			}
 
-	r := regexp.MustCompile(`(?m:server returned unexpected status code)`)
-	if !r.MatchString(err.Error()) {
-		t.Fatalf("Error not matched: %s", err)
-	}
-}
+			if testCase.ExpectedError != nil {
+				if err.Error() != testCase.ExpectedError.Error() {
+					t.Fatalf("Expected %v, got %v", testCase.ExpectedError, err)
+				}
+			}
 
-func Test_GetSecretList_Unauthorized401(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusUnauthorized)
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	_, err := client.GetSecretList(context.Background(), "fn")
+			switch testCase.ExpectedResponse.(type) {
+			case []string:
+				expected := makeSecretList(testCase.ExpectedResponse.([]string))
+				for k, v := range secrets {
+					if expected[k] != v {
+						t.Fatalf("Expeceted: %#v - Actual: %#v", wantListFunctionsResponse[k], v)
+					}
+				}
 
-	if err == nil {
-		t.Fatalf("Error was not returned")
-	}
-
-	r := regexp.MustCompile(`(?m:unauthorized access, run \"faas-cli login\" to setup authentication for this server)`)
-	if !r.MatchString(err.Error()) {
-		t.Fatalf("Error not matched: %s", err)
-	}
-}
-
-var expectedSecretList = []types.Secret{
-	{
-		Name: "Secret1",
-	},
-	{
-		Name: "Secret2",
-	},
-}
-
-func Test_CreateSecret_200OK(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusOK)
-	secret := types.Secret{
-		Name:      "secret-name",
-		Value:     "secret-value",
-		Namespace: "openfaas-fn",
-	}
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	status, _ := client.CreateSecret(context.Background(), secret)
-
-	if status != http.StatusOK {
-		t.Errorf("expected: %d, got: %d", http.StatusOK, status)
-	}
-}
-
-func Test_CreateSecret_201Created(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusCreated)
-	secret := types.Secret{
-		Name:      "secret-name",
-		Value:     "secret-value",
-		Namespace: "openfaas-fn",
-	}
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	status, _ := client.CreateSecret(context.Background(), secret)
-
-	if status != http.StatusCreated {
-		t.Errorf("expected: %d, got: %d", http.StatusCreated, status)
+			}
+		})
 	}
 }
 
-func Test_CreateSecret_202Accepted(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusAccepted)
-	secret := types.Secret{
-		Name:      "secret-name",
-		Value:     "secret-value",
-		Namespace: "openfaas-fn",
+func makeSecretList(i []string) []types.Secret {
+	var secrets []types.Secret
+	for _, s := range i {
+		secrets = append(secrets, types.Secret{Name: s})
 	}
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	status, _ := client.CreateSecret(context.Background(), secret)
+	return secrets
+}
 
-	if status != http.StatusAccepted {
-		t.Errorf("expected: %d, got: %d", http.StatusAccepted, status)
+func TestSecretCreate(t *testing.T) {
+	type testCases struct {
+		Name             string
+		MockResponseCode int
+		ExpectedError    error
+		ExpectedResponse interface{}
+		Namespace        string
+	}
+
+	tests := []testCases{
+		{
+			Name:             "Expect 200",
+			MockResponseCode: http.StatusOK,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Expect 201",
+			MockResponseCode: http.StatusOK,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Expect 202",
+			MockResponseCode: http.StatusAccepted,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Expect 400",
+			MockResponseCode: http.StatusBadRequest,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "Bad Request",
+			},
+			ExpectedResponse: "Bad Request",
+		},
+		{
+			Name:             "Expect conflict",
+			MockResponseCode: http.StatusConflict,
+			ExpectedError: OpenFaaSError{
+				StatusCode: http.StatusConflict,
+				Message:    "Conflict",
+			},
+			ExpectedResponse: "Conflict",
+		},
+		{
+			Name:             "Expect 500",
+			MockResponseCode: http.StatusInternalServerError,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "Internal server Error",
+			},
+			ExpectedResponse: "Internal server Error",
+		},
+		{
+			Name:             "Expect 401",
+			MockResponseCode: http.StatusUnauthorized,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: http.StatusUnauthorized,
+				Message:    "Not Authorized",
+			},
+			ExpectedResponse: "Not Authorized",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.Name, func(t *testing.T) {
+			s := test.MockHttpServer(t, []test.Request{
+				{
+					ResponseStatusCode: testCase.MockResponseCode,
+					ResponseBody:       testCase.ExpectedResponse,
+				},
+			})
+			defer s.Close()
+			client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
+
+			sec := types.Secret{
+				Name:      testCase.Name,
+				Namespace: testCase.Namespace,
+				Value:     "",
+			}
+			_, err := client.CreateSecret(context.Background(), sec)
+
+			if testCase.ExpectedError == nil && err != nil {
+				t.Errorf("Error returned: %v", err)
+			}
+
+			if testCase.ExpectedError != nil {
+				if err.Error() != testCase.ExpectedError.Error() {
+					t.Fatalf("Expected %v, got %v", testCase.ExpectedError, err)
+				}
+			}
+
+		})
 	}
 }
 
-func Test_CreateSecret_Not200(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusBadRequest)
-
-	secret := types.Secret{
-		Name:      "secret-name",
-		Value:     "secret-value",
-		Namespace: "openfaas-fn",
-	}
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	status, output := client.CreateSecret(context.Background(), secret)
-
-	if status != http.StatusBadRequest {
-		t.Errorf("expected: %d, got: %d", http.StatusBadRequest, status)
+func TestSecretDelete(t *testing.T) {
+	type testCases struct {
+		Name             string
+		MockResponseCode int
+		ExpectedError    error
+		ExpectedResponse interface{}
 	}
 
-	r := regexp.MustCompile(`(?m:server returned unexpected status code)`)
-	if !r.MatchString(output) {
-		t.Fatalf("Error not matched: %s", output)
-	}
-}
-
-func Test_CreateSecret_Unauthorized401(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusUnauthorized)
-
-	secret := types.Secret{
-		Name:      "secret-name",
-		Value:     "secret-value",
-		Namespace: "openfaas-fn",
-	}
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	status, output := client.CreateSecret(context.Background(), secret)
-
-	if status != http.StatusUnauthorized {
-		t.Errorf("expected: %d, got: %d", http.StatusUnauthorized, status)
-	}
-
-	r := regexp.MustCompile(`(?m:unauthorized access, run \"faas-cli login\" to setup authentication for this server)`)
-	if !r.MatchString(output) {
-		t.Fatalf("Error not matched: %s", output)
-	}
-}
-
-func Test_CreateSecret_Conflict409(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusConflict)
-
-	secret := types.Secret{
-		Name:      "secret-name",
-		Value:     "secret-value",
-		Namespace: "openfaas-fn",
-	}
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	status, output := client.CreateSecret(context.Background(), secret)
-
-	if status != http.StatusConflict {
-		t.Errorf("want: %d, got: %d", http.StatusConflict, status)
-	}
-
-	r := regexp.MustCompile(`(?m:secret with the name "` + secret.Name + `" already exists)`)
-	if !r.MatchString(output) {
-		t.Fatalf("Error not matched: %s", output)
-	}
-}
-
-func Test_CreateSecret_ForbiddenNamespace(t *testing.T) {
-	s := test.MockHttpServerStatus(t, http.StatusBadRequest)
-
-	secret := types.Secret{
-		Name:      "secret-name",
-		Value:     "secret-value",
-		Namespace: "kube-system",
-	}
-	client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
-	status, output := client.CreateSecret(context.Background(), secret)
-
-	if status != http.StatusBadRequest {
-		t.Errorf("want: %d, got: %d", http.StatusBadRequest, status)
+	tests := []testCases{
+		{
+			Name:             "Expect 200",
+			MockResponseCode: http.StatusOK,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Expect 202",
+			MockResponseCode: http.StatusAccepted,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Expect 400",
+			MockResponseCode: http.StatusBadRequest,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "Bad Request",
+			},
+			ExpectedResponse: "Bad Request",
+		},
+		{
+			Name:             "Expect conflict",
+			MockResponseCode: http.StatusConflict,
+			ExpectedError: OpenFaaSError{
+				StatusCode: http.StatusConflict,
+				Message:    "Conflict",
+			},
+			ExpectedResponse: "Conflict",
+		},
+		{
+			Name:             "Expect 500",
+			MockResponseCode: http.StatusInternalServerError,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "Internal server Error",
+			},
+			ExpectedResponse: "Internal server Error",
+		},
+		{
+			Name:             "Expect 401",
+			MockResponseCode: http.StatusUnauthorized,
+			ExpectedError: &OpenFaaSError{
+				StatusCode: http.StatusUnauthorized,
+				Message:    "Not Authorized",
+			},
+			ExpectedResponse: "Not Authorized",
+		},
 	}
 
-	r := regexp.MustCompile(`(?m:server returned unexpected status code: 400)`)
-	if !r.MatchString(output) {
-		t.Fatalf("Error not matched: %s", output)
+	for _, testCase := range tests {
+		t.Run(testCase.Name, func(t *testing.T) {
+			s := test.MockHttpServer(t, []test.Request{
+				{
+					ResponseStatusCode: testCase.MockResponseCode,
+					ResponseBody:       testCase.ExpectedResponse,
+				},
+			})
+			defer s.Close()
+			client, _ := NewClient(NewTestAuth(nil), s.URL, nil, nil)
+
+			sec := types.Secret{
+				Name:  testCase.Name,
+				Value: "",
+			}
+			_, err := client.RemoveSecret(context.Background(), sec)
+
+			if testCase.ExpectedError == nil && err != nil {
+				t.Errorf("Error returned: %v", err)
+			}
+
+			if testCase.ExpectedError != nil {
+				if err.Error() != testCase.ExpectedError.Error() {
+					t.Fatalf("Expected %v, got %v", testCase.ExpectedError, err)
+				}
+			}
+
+		})
 	}
 }

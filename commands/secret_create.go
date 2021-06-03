@@ -126,8 +126,11 @@ func runSecretCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("Creating secret: " + secret.Name)
-	_, output := client.CreateSecret(context.Background(), secret)
-	fmt.Printf(output)
+	_, err = client.CreateSecret(context.Background(), secret)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Secret Created")
 
 	return nil
 }
