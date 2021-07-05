@@ -39,7 +39,7 @@ func init() {
 // versionCmd displays version information
 var versionCmd = &cobra.Command{
 	Use:   "version [--short-version] [--gateway GATEWAY_URL]",
-	Short: "Display the clients version information",
+	Short: "Display the clients version information. Foo",
 	Long: fmt.Sprintf(`The version command returns the current clients version information.
 
 This currently consists of the GitSHA from which the client was built.
@@ -115,7 +115,7 @@ func printServerVersions() error {
 Provider
  name:          %s
  orchestration: %s
- version:       %s 
+ version:       %s
  sha:           %s
 `, gatewayInfo.Provider.Name, gatewayInfo.Provider.Orchestration, gatewayInfo.Provider.Version.Release, gatewayInfo.Provider.Version.SHA)
 	return nil

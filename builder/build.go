@@ -24,7 +24,7 @@ const AdditionalPackageBuildArg = "ADDITIONAL_PACKAGE"
 
 // BuildImage construct Docker image from function parameters
 // TODO: refactor signature to a struct to simplify the length of the method header
-func BuildImage(image string, handler string, functionName string, language string, nocache bool, squash bool, shrinkwrap bool, buildArgMap map[string]string, buildOptions []string, tagMode schema.BuildFormat, buildLabelMap map[string]string, quietBuild bool, copyExtraPaths []string) error {
+func BuildImage(image string, handler string, functionName string, language string, nocache bool, squash bool, shrinkwrap bool, buildArgMap map[string]string, buildOptions []string, tagMode schema.BuildFormat, buildLabelMap map[string]string, quietBuild bool, copyExtraPaths []string, ignorePaths []string) error {
 
 	if stack.IsValidTemplate(language) {
 		pathToTemplateYAML := fmt.Sprintf("./template/%s/template.yml", language)
@@ -48,7 +48,7 @@ func BuildImage(image string, handler string, functionName string, language stri
 			return fmt.Errorf("building %s, %s is an invalid path", imageName, handler)
 		}
 
-		tempPath, buildErr := createBuildContext(functionName, handler, language, isLanguageTemplate(language), langTemplate.HandlerFolder, copyExtraPaths)
+		tempPath, buildErr := createBuildContext(functionName, handler, language, isLanguageTemplate(language), langTemplate.HandlerFolder, copyExtraPaths, ignorePaths)
 		fmt.Printf("Building: %s with %s template. Please wait..\n", imageName, language)
 		if buildErr != nil {
 			return buildErr
@@ -184,7 +184,7 @@ func isRunningInCI() bool {
 }
 
 // createBuildContext creates temporary build folder to perform a Docker build with language template
-func createBuildContext(functionName string, handler string, language string, useFunction bool, handlerFolder string, copyExtraPaths []string) (string, error) {
+func createBuildContext(functionName string, handler string, language string, useFunction bool, handlerFolder string, copyExtraPaths []string, ignorePaths []string) (string, error) {
 	tempPath := fmt.Sprintf("./build/%s/", functionName)
 	fmt.Printf("Clearing temporary build folder: %s\n", tempPath)
 
@@ -232,15 +232,21 @@ func createBuildContext(functionName string, handler string, language string, us
 		return tempPath, readErr
 	}
 
+	functionIgnorePaths := []string{}
+	for _, ignorePath := range ignorePaths {
+		functionIgnorePaths = append(functionIgnorePaths, filepath.Clean(path.Join(functionPath, ignorePath)))
+	}
+
 	for _, info := range infos {
 		switch info.Name() {
 		case "build", "template":
 			fmt.Printf("Skipping \"%s\" folder\n", info.Name())
 			continue
 		default:
-			copyErr := CopyFiles(
+			copyErr := CopyFilesWithIgnorePaths(
 				filepath.Clean(path.Join(handler, info.Name())),
 				filepath.Clean(path.Join(functionPath, info.Name())),
+				functionIgnorePaths,
 			)
 
 			if copyErr != nil {
@@ -257,9 +263,10 @@ func createBuildContext(functionName string, handler string, language string, us
 		// Note that if useFunction is false, ie is a `dockerfile` template, then
 		// functionPath == tempPath, the docker build context, not the `function` handler folder
 		// inside the docker build context
-		copyErr := CopyFiles(
+		copyErr := CopyFilesWithIgnorePaths(
 			extraPathAbs,
 			filepath.Clean(path.Join(functionPath, extraPath)),
+			functionIgnorePaths,
 		)
 
 		if copyErr != nil {

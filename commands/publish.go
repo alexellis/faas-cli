@@ -69,12 +69,12 @@ var publishCmd = &cobra.Command{
 	Short: "Builds and pushes multi-arch OpenFaaS container images",
 	Long: `Builds and pushes multi-arch OpenFaaS container images using Docker buildx.
 Most users will want faas-cli build or faas-cli up for development and testing.
-This command is designed to make releasing and publishing multi-arch container 
+This command is designed to make releasing and publishing multi-arch container
 images easier.
 
-A stack.yaml file is required, and any images that are built will not be 
-available in the local Docker library. This is due to technical constraints in 
-Docker and buildx. You must use a multi-arch template to use this command with 
+A stack.yaml file is required, and any images that are built will not be
+available in the local Docker library. This is due to technical constraints in
+Docker and buildx. You must use a multi-arch template to use this command with
 correctly configured TARGETPLATFORM and BUILDPLATFORM arguments.
 
 See also: faas-cli build`,
@@ -205,6 +205,7 @@ func publish(services *stack.Services, queueDepth int, shrinkwrap, quietBuild bo
 						buildLabelMap,
 						quietBuild,
 						combinedExtraPaths,
+						function.IgnorePaths,
 						platforms,
 						extraTags,
 					)

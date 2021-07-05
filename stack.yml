@@ -36,6 +36,8 @@ functions:
     lang: node
     handler: ./sample/nodejs-echo
     image: alexellis/faas-nodejs-echo:0.1
+    ignore_paths:
+      - node_modules
 #    limits:
 #      memory: 40m
 #    requests:

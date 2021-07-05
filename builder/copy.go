@@ -12,14 +12,26 @@ import (
 
 // CopyFiles copies files from src to destination.
 func CopyFiles(src, dest string) error {
+	return CopyFilesWithIgnorePaths(src, dest, nil)
+}
+
+// CopyFilesWithIgnorePaths copies files from src to destination,
+// but ignores files or directories specified by ignorePaths
+func CopyFilesWithIgnorePaths(src, dest string, ignorePaths []string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
 
+	for _, ignorePath := range ignorePaths {
+		if dest == ignorePath {
+			return nil
+		}
+	}
+
 	if info.IsDir() {
 		debugPrint(fmt.Sprintf("Creating directory: %s at %s", info.Name(), dest))
-		return copyDir(src, dest)
+		return copyDir(src, dest, ignorePaths)
 	}
 
 	debugPrint(fmt.Sprintf("cp - %s %s", src, dest))
@@ -27,7 +39,7 @@ func CopyFiles(src, dest string) error {
 }
 
 // copyDir will recursively copy a directory to dest
-func copyDir(src, dest string) error {
+func copyDir(src, dest string, ignorePaths []string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return fmt.Errorf("error reading dest stats: %s", err.Error())
@@ -43,9 +55,10 @@ func copyDir(src, dest string) error {
 	}
 
 	for _, info := range infos {
-		if err := CopyFiles(
+		if err := CopyFilesWithIgnorePaths(
 			filepath.Join(src, info.Name()),
 			filepath.Join(dest, info.Name()),
+			ignorePaths,
 		); err != nil {
 			return err
 		}

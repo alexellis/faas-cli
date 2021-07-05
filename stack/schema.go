@@ -60,6 +60,10 @@ type Function struct {
 	// BuildArgs for providing build-args
 	BuildArgs map[string]string `yaml:"build_args,omitempty"`
 
+	// IgnorePaths are relative files or directories that will not be copied to the
+	// build folder e.g. node_modules
+	IgnorePaths []string `yaml:"ignore_paths,omitempty"`
+
 	// Platforms for use with buildx and faas-cli publish
 	Platforms string `yaml:"platforms,omitempty"`
 }

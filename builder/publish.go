@@ -16,7 +16,7 @@ import (
 // PublishImage will publish images as multi-arch
 // TODO: refactor signature to a struct to simplify the length of the method header
 func PublishImage(image string, handler string, functionName string, language string, nocache bool, squash bool, shrinkwrap bool, buildArgMap map[string]string,
-	buildOptions []string, tagMode schema.BuildFormat, buildLabelMap map[string]string, quietBuild bool, copyExtraPaths []string, platforms string, extraTags []string) error {
+	buildOptions []string, tagMode schema.BuildFormat, buildLabelMap map[string]string, quietBuild bool, copyExtraPaths []string, ignorePaths []string, platforms string, extraTags []string) error {
 
 	if stack.IsValidTemplate(language) {
 		pathToTemplateYAML := fmt.Sprintf("./template/%s/template.yml", language)
@@ -40,7 +40,7 @@ func PublishImage(image string, handler string, functionName string, language st
 			return fmt.Errorf("building %s, %s is an invalid path", imageName, handler)
 		}
 
-		tempPath, buildErr := createBuildContext(functionName, handler, language, isLanguageTemplate(language), langTemplate.HandlerFolder, copyExtraPaths)
+		tempPath, buildErr := createBuildContext(functionName, handler, language, isLanguageTemplate(language), langTemplate.HandlerFolder, copyExtraPaths, ignorePaths)
 		fmt.Printf("Building: %s with %s template. Please wait..\n", imageName, language)
 		if buildErr != nil {
 			return buildErr
