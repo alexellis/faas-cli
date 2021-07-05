@@ -73,9 +73,9 @@ func runList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	functions, err := proxyClient.ListFunctions(context.Background(), functionNamespace)
+	functions, _, err := proxyClient.ListFunctions(context.Background(), functionNamespace)
 	if err != nil {
-		return err
+		return actionableErrorMessage(err)
 	}
 
 	if sortOrder == "name" {

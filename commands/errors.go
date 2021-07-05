@@ -4,7 +4,10 @@
 package commands
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/openfaas/faas-cli/proxy"
 )
 
 const (
@@ -23,4 +26,14 @@ func checkTLSInsecure(gateway string, tlsInsecure bool) string {
 		}
 	}
 	return ""
+}
+
+//actionableErrorMessage print actionable error message based on APIError check
+func actionableErrorMessage(err error) error {
+	if proxy.IsUnknown(err) {
+		return fmt.Errorf("server returned unexpected status response: %s", err.Error())
+	} else if proxy.IsUnauthorized(err) {
+		return fmt.Errorf("unauthorized access, run \"faas-cli login\" to setup authentication for this server")
+	}
+	return err
 }

@@ -21,7 +21,8 @@ type deployProxyTest struct {
 	mockServerResponses []int
 	replace             bool
 	update              bool
-	expectedOutput      string
+	expectedMessage     string
+	statusCode          int
 }
 
 func runDeployProxyTest(t *testing.T, deployTest deployProxyTest) {
@@ -34,32 +35,34 @@ func runDeployProxyTest(t *testing.T, deployTest deployProxyTest) {
 	cliAuth := NewTestAuth(nil)
 	proxyClient, _ := NewClient(cliAuth, s.URL, nil, &defaultCommandTimeout)
 
-	stdout := test.CaptureStdout(func() {
-		proxyClient.DeployFunction(context.TODO(), &DeployFunctionSpec{
-			"fprocess",
-			"function",
-			"image",
-			"dXNlcjpwYXNzd29yZA==",
-			"language",
-			deployTest.replace,
-			nil,
-			"network",
-			[]string{},
-			deployTest.update,
-			[]string{},
-			map[string]string{},
-			map[string]string{},
-			FunctionResourceRequest{},
-			false,
-			tlsNoVerify,
-			"",
-			"",
-		})
+	dRes, httpRes, _ := proxyClient.DeployFunction(context.TODO(), &DeployFunctionSpec{
+		"fprocess",
+		"function",
+		"image",
+		"dXNlcjpwYXNzd29yZA==",
+		"language",
+		deployTest.replace,
+		nil,
+		"network",
+		[]string{},
+		deployTest.update,
+		[]string{},
+		map[string]string{},
+		map[string]string{},
+		FunctionResourceRequest{},
+		false,
+		tlsNoVerify,
+		"",
+		"",
 	})
 
-	r := regexp.MustCompile(deployTest.expectedOutput)
-	if !r.MatchString(stdout) {
-		t.Fatalf("Output not matched: %s", stdout)
+	if httpRes.StatusCode != deployTest.statusCode {
+		t.Fatalf("StatuCode did not match. expected: %d, got: %d", deployTest.statusCode, httpRes.StatusCode)
+	}
+
+	r := regexp.MustCompile(deployTest.expectedMessage)
+	if !r.MatchString(dRes.Message) {
+		t.Fatalf("Output not matched: %s", dRes.Message)
 	}
 }
 
@@ -70,21 +73,24 @@ func Test_RunDeployProxyTests(t *testing.T) {
 			mockServerResponses: []int{http.StatusOK, http.StatusOK},
 			replace:             true,
 			update:              false,
-			expectedOutput:      `(?m:Deployed)`,
+			statusCode:          http.StatusOK,
+			expectedMessage:     `(?m:Deployed)`,
 		},
 		{
 			title:               "404_Deploy",
 			mockServerResponses: []int{http.StatusOK, http.StatusNotFound},
 			replace:             true,
 			update:              false,
-			expectedOutput:      `(?m:Unexpected status: 404)`,
+			statusCode:          http.StatusNotFound,
+			expectedMessage:     "",
 		},
 		{
 			title:               "UpdateFailedDeployed",
 			mockServerResponses: []int{http.StatusNotFound, http.StatusOK},
 			replace:             false,
 			update:              true,
-			expectedOutput:      `(?m:Deployed)`,
+			statusCode:          http.StatusOK,
+			expectedMessage:     `(?m:Deployed)`,
 		},
 	}
 	for _, tst := range deployProxyTests {

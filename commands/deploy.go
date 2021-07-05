@@ -276,9 +276,15 @@ Error: %s`, fprocessErr.Error())
 			if msg := checkTLSInsecure(services.Provider.GatewayURL, deploySpec.TLSInsecure); len(msg) > 0 {
 				fmt.Println(msg)
 			}
-			statusCode := proxyClient.DeployFunction(ctx, deploySpec)
-			if badStatusCode(statusCode) {
-				failedStatusCodes[k] = statusCode
+			dRes, res, err := proxyClient.DeployFunction(ctx, deploySpec)
+
+			if err == nil {
+				fmt.Println(dRes.Message)
+				fmt.Printf("URL: %s\n\n", dRes.URL)
+			}
+
+			if badStatusCode(res.StatusCode) {
+				failedStatusCodes[k] = res.StatusCode
 			}
 		}
 	} else {
@@ -375,9 +381,14 @@ func deployImage(
 		fmt.Println(msg)
 	}
 
-	statusCode = client.DeployFunction(ctx, deploySpec)
+	dRes, res, err := client.DeployFunction(ctx, deploySpec)
+	if err != nil {
+		return res.StatusCode, err
+	}
 
-	return statusCode, nil
+	fmt.Println(dRes.Message)
+	fmt.Printf("URL: %s\n\n", dRes.URL)
+	return res.StatusCode, nil
 }
 
 func mergeSlice(values []string, overlay []string) []string {

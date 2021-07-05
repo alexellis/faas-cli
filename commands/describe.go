@@ -82,9 +82,9 @@ func runDescribe(cmd *cobra.Command, args []string) error {
 	}
 
 	//To get correct value for invocation count from /system/functions endpoint
-	functionList, err := cliClient.ListFunctions(ctx, functionNamespace)
+	functionList, _, err := cliClient.ListFunctions(ctx, functionNamespace)
 	if err != nil {
-		return err
+		return actionableErrorMessage(err)
 	}
 
 	var invocationCount int

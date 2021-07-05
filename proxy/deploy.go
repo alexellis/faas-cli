@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -57,29 +56,48 @@ func generateFuncStr(spec *DeployFunctionSpec) string {
 	return spec.FunctionName
 }
 
+type DeployResponse struct {
+	Message       string
+	RollingUpdate bool
+	URL           string
+}
+
 // DeployFunction first tries to deploy a function and if it exists will then attempt
 // a rolling update. Warnings are suppressed for the second API call (if required.)
-func (c *Client) DeployFunction(context context.Context, spec *DeployFunctionSpec) int {
+func (c *Client) DeployFunction(context context.Context, spec *DeployFunctionSpec) (*DeployResponse, *http.Response, error) {
 
 	rollingUpdateInfo := fmt.Sprintf("Function %s already exists, attempting rolling-update.", spec.FunctionName)
-	statusCode, deployOutput := c.deploy(context, spec, spec.Update)
+	res, err := c.deploy(context, spec, spec.Update)
 
-	if spec.Update == true && statusCode == http.StatusNotFound {
-		// Re-run the function with update=false
-
-		statusCode, deployOutput = c.deploy(context, spec, false)
-	} else if statusCode == http.StatusOK {
-		fmt.Println(rollingUpdateInfo)
+	if err != nil && IsUnknown(err) {
+		return nil, res, err
 	}
-	fmt.Println()
-	fmt.Println(deployOutput)
-	return statusCode
+
+	var deployResponse DeployResponse
+	if err == nil {
+		deployResponse.Message = fmt.Sprintf("Deployed. %s.", res.Status)
+		deployResponse.URL = fmt.Sprintf("%s/function/%s", c.GatewayURL.String(), generateFuncStr(spec))
+	}
+
+	if spec.Update == true && IsNotFound(err) {
+		// Re-run the function with update=false
+		res, err = c.deploy(context, spec, false)
+		if err == nil {
+			deployResponse.Message = fmt.Sprintf("Deployed. %s.", res.Status)
+			deployResponse.URL = fmt.Sprintf("%s/function/%s", c.GatewayURL.String(), generateFuncStr(spec))
+		}
+
+	} else if res.StatusCode == http.StatusOK {
+		deployResponse.Message += rollingUpdateInfo
+		deployResponse.RollingUpdate = true
+
+	}
+
+	return &deployResponse, res, err
 }
 
 // deploy a function to an OpenFaaS gateway over REST
-func (c *Client) deploy(context context.Context, spec *DeployFunctionSpec, update bool) (int, string) {
-
-	var deployOutput string
+func (c *Client) deploy(context context.Context, spec *DeployFunctionSpec, update bool) (*http.Response, error) {
 	// Need to alter Gateway to allow nil/empty string as fprocess, to avoid this repetition.
 	var fprocessTemplate string
 	if len(spec.FProcess) > 0 {
@@ -146,37 +164,20 @@ func (c *Client) deploy(context context.Context, spec *DeployFunctionSpec, updat
 	request, err = c.newRequest(method, "/system/functions", reader)
 
 	if err != nil {
-		deployOutput += fmt.Sprintln(err)
-		return http.StatusInternalServerError, deployOutput
+		return nil, err
 	}
 
 	res, err := c.doRequest(context, request)
 
 	if err != nil {
-		deployOutput += fmt.Sprintln("Is OpenFaaS deployed? Do you need to specify the --gateway flag?")
-		deployOutput += fmt.Sprintln(err)
-		return http.StatusInternalServerError, deployOutput
+		errMessage := fmt.Sprintln("Is OpenFaaS deployed? Do you need to specify the --gateway flag?")
+		errMessage += fmt.Sprintln(err)
+		return res, NewUnknown(errMessage, 0)
 	}
 
-	if res.Body != nil {
-		defer res.Body.Close()
+	err = checkForAPIError(res)
+	if err != nil {
+		return res, err
 	}
-
-	switch res.StatusCode {
-	case http.StatusOK, http.StatusCreated, http.StatusAccepted:
-		deployOutput += fmt.Sprintf("Deployed. %s.\n", res.Status)
-
-		deployedURL := fmt.Sprintf("URL: %s/function/%s", c.GatewayURL.String(), generateFuncStr(spec))
-		deployOutput += fmt.Sprintln(deployedURL)
-	case http.StatusUnauthorized:
-		deployOutput += fmt.Sprintln("unauthorized access, run \"faas-cli login\" to setup authentication for this server")
-
-	default:
-		bytesOut, err := ioutil.ReadAll(res.Body)
-		if err == nil {
-			deployOutput += fmt.Sprintf("Unexpected status: %d, message: %s\n", res.StatusCode, string(bytesOut))
-		}
-	}
-
-	return res.StatusCode, deployOutput
+	return res, nil
 }

@@ -1,9 +1,12 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -128,4 +131,31 @@ func addQueryParams(u string, params map[string]string) (string, error) {
 //AddCheckRedirect add CheckRedirect to the client
 func (c *Client) AddCheckRedirect(checkRedirect func(*http.Request, []*http.Request) error) {
 	c.httpClient.CheckRedirect = checkRedirect
+}
+
+// parseResponse function parses HTTP response body into a typed struct
+// or copies to io.Writer object. If it fails to decode response body
+// then it re-construct it so that it can be read later
+func parseResponse(res *http.Response, v interface{}) error {
+	var err error
+	defer res.Body.Close()
+
+	switch v := v.(type) {
+	case nil:
+	case io.Writer:
+		_, err = io.Copy(v, res.Body)
+	default:
+		data, err := ioutil.ReadAll(res.Body)
+		if err == io.EOF {
+			err = nil // ignore EOF errors caused by empty response body
+		}
+
+		decErr := json.Unmarshal(data, v)
+		if decErr != nil {
+			err = decErr
+			// In case of JSON decode error, re-construct response body
+			res.Body = ioutil.NopCloser(bytes.NewBuffer(data))
+		}
+	}
+	return err
 }

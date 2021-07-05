@@ -7,7 +7,6 @@ import (
 	"context"
 	"net/http"
 	"reflect"
-	"regexp"
 
 	"testing"
 
@@ -44,7 +43,7 @@ func Test_ListFunctions(t *testing.T) {
 
 	cliAuth := NewTestAuth(nil)
 	client, _ := NewClient(cliAuth, s.URL, nil, &defaultCommandTimeout)
-	result, err := client.ListFunctions(context.Background(), "")
+	result, _, err := client.ListFunctions(context.Background(), "")
 
 	if err != nil {
 		t.Fatalf("Error returned: %s", err)
@@ -61,14 +60,13 @@ func Test_ListFunctions_Not200(t *testing.T) {
 
 	cliAuth := NewTestAuth(nil)
 	client, _ := NewClient(cliAuth, s.URL, nil, &defaultCommandTimeout)
-	_, err := client.ListFunctions(context.Background(), "")
+	_, _, err := client.ListFunctions(context.Background(), "")
 
 	if err == nil {
 		t.Fatalf("Error was not returned")
 	}
 
-	r := regexp.MustCompile(`(?m:server returned unexpected status code)`)
-	if !r.MatchString(err.Error()) {
+	if !IsBadRequest(err) {
 		t.Fatalf("Error not matched: %s", err)
 	}
 }
