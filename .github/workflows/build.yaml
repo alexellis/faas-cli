@@ -11,22 +11,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - 
-        uses: actions/checkout@master
+      - uses: actions/checkout@master
         with:
             fetch-depth: 1
-      -
-        name: Set Username/Repo as ENV vars
+      - name: Set Username/Repo as ENV vars
         run: echo "USER_REPO"=$(echo "$GITHUB_REPOSITORY" | awk '{print tolower($1)}' | sed -e "s/:refs//") >> $GITHUB_ENV
-      -
-        name: Set up QEMU
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-      - 
-        name: Set up Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-      - 
-        name: Local docker build (non-root image)
+      - name: Get Repo Owner
+        id: get_repo_owner
+        run: echo ::set-output name=repo_owner::$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
+
+      - name: Local docker build (non-root image)
         uses: docker/build-push-action@v2
         with:
           context: .
@@ -37,11 +37,11 @@ jobs:
           build-args: |
             VERSION=latest-dev
             GIT_COMMIT=${{ github.sha }}
-            REPO_URL=https://github.com/${{ env.USER_REPO }}
+            REPO_URL=https://github.com/${{ steps.get_repo_owner.outputs.repo_owner }}/faas-cli
           load: true
-          tags: openfaas/faas-cli:${{ github.sha }}
-      -
-        name: Test for multi-arch build
+          tags: ghcr.io/${{ steps.get_repo_owner.outputs.repo_owner }}/faas-cli:${{ github.sha }}
+
+      - name: Test for multi-arch build
         uses: docker/build-push-action@v2
         with:
           context: .
@@ -53,21 +53,18 @@ jobs:
           build-args: |
             VERSION=latest-dev
             GIT_COMMIT=${{ github.sha }}
-            REPO_URL=https://github.com/${{ env.USER_REPO }}
-          tags: openfaas/faas-cli:${{ github.sha }}
-      - 
-        name: Copy binary to host
+            REPO_URL=https://github.com/${{ steps.get_repo_owner.outputs.repo_owner }}/faas-cli
+          tags: ghcr.io/${{ steps.get_repo_owner.outputs.repo_owner }}/faas-cli:${{ github.sha }}
+
+      - name: Copy binary to host
         run: |
-          docker create --name faas-cli openfaas/faas-cli:${{ github.sha }} && \
+          docker create --name faas-cli ghcr.io/${{ steps.get_repo_owner.outputs.repo_owner }}/faas-cli:${{ github.sha }} && \
           mkdir -p ./bin && \
           docker cp faas-cli:/usr/bin/faas-cli ./bin && \
           docker rm -f faas-cli
-      - 
-        name: Build samples
+      - name: Build samples
         run: ./build_samples.sh
-      - 
-        name: Test version
+      - name: Test version
         run: ./test/version.sh ./bin/faas-cli
-      - 
-        name: Test the cli and the function behaviour
+      - name: Test the cli and the function behaviour
         run: make test-templating
